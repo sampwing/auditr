@@ -8,22 +8,6 @@
 (def TESTPORT2 "5001")
 (def TESTPROTOCOL "udp")
 
-(def not-nil? (complement nil?))
-
-(defn line-builder
-  [{:keys [ip-address security-group from-port to-port protocol]}]
-  (str 
-    (if (not-nil? ip-address)
-      "ip = " ip-address)
-    (if (not-nil? security-group)
-      " sg = " security-group)
-    (if (not-nil? from-port)
-      " port = " from-port)
-    (if (and (not-nil? from-port) (not-nil? to-port))
-        to-port)
-    (if (not-nil? protocol)
-      " protocol = " protocol)))
-
 (deftest ip-test
   (testing "failed to parse ip address"
     (let [r (config-parse-line (str "ip=" TESTHOST))]
