@@ -1,6 +1,6 @@
-(ns ops.core-test
+(ns auditr.core-test
   (:require [clojure.test :refer :all]
-            [ops.core :refer :all]))
+            [auditr.core :refer :all]))
 
 (deftest a-test
   (testing "FIXME, I fail."

@@ -1,4 +1,4 @@
-(ns ops.config
+(ns auditr.config
   (:gen-class))
 
 (require '[instaparse.core :as parse])

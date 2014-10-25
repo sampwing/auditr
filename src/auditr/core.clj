@@ -1,4 +1,4 @@
-(ns ops.core
+(ns auditr.core
   (:gen-class))
 
 (require '[amazonica.core :as amazonica])

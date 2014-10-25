@@ -1,6 +1,6 @@
-(ns ops.config-test
+(ns auditr.config-test
   (:require [clojure.test :refer :all]
-            [ops.config :refer :all]))
+            [auditr.config :refer :all]))
 
 (def TESTSGROUP "app")
 (def TESTHOST "127.0.0.1")
