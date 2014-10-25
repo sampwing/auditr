@@ -9,12 +9,12 @@
   (amazonica/defcredential (System/getenv "AWS_AUDIT_KEY") (System/getenv "AWS_AUDIT_SECRET")))
 
 (defn build-config
-  [{:keys [ip-protocol from-port to-port ip-ranges user-id-group-pairs]}]
+  [{:keys [ip-protocol from-port to-port ip-ranges user-id-group-pairs] :as data}]
   (doseq [ip-range ip-ranges] 
-    (println (util/build-line {:ip-address ip-range :from-port from-port :to-port to-port :ip-protocol ip-protocol})))
+    (println (util/build-line (conj data {:ip-address ip-range}))))
   (doseq [group-pair user-id-group-pairs]
     (let [{:keys [group-name]} group-pair]
-    (println (util/build-line {:security-group group-name :from-port from-port :to-port to-port :ip-protocol ip-protocol})))))
+    (println (util/build-line (conj data {:security-group group-name})))))
 
 (defn sg-info 
   "print security-group information"
