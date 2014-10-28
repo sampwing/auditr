@@ -11,11 +11,9 @@
 
 (defn build-config
   [{:keys [ip-protocol from-port to-port ip-ranges user-id-group-pairs] :as data}]
-  (doseq [ip-range ip-ranges] 
-    (println (util/build-line (conj data {:ip-address ip-range}))))
-  (doseq [group-pair user-id-group-pairs]
-    (let [{:keys [group-name]} group-pair]
-    (println (util/build-line (conj data {:security-group group-name}))))))
+  (let [ip-rules (map util/build-line (map #(conj data {:ip-address %1}) ip-ranges))
+        sg-rules (map util/build-line (map #(conj data {:security-group (:group-name %1)}) user-id-group-pairs))]
+    (concat ip-rules sg-rules)))
 
 (defn sg-info 
   "print security-group information"
@@ -23,14 +21,14 @@
   (let [{:keys [description group-name ip-permissions]} sg]
     (println "")
     (println (clojure.string/join " - " [(util/build-line {:group group-name}) description]))
-    (doseq [ip-permission ip-permissions] (build-config ip-permission))
-    (println "")))
+    (let [m {:group group-name 
+             :rules (reduce concat (map build-config ip-permissions))}]
+      (prn m))))
  
 (aws-authenticate)
 
 (def sgs 
   (:security-groups (ec2/describe-security-groups)))
-
 
 (def cli-options
   [["-o" "--output OUTPUT" "Output File"
@@ -40,10 +38,9 @@
 (defn -main
   [& args]
   (let [{options :options} (parse-opts args cli-options)]
-  (prn options)
-  (doseq [arg args] 
-    (if (and 
-          (= arg "generate")
-          ((complement nil?) (:output options)))
-      (doseq [sg sgs] (sg-info sg))))))
+    (doseq [arg args] 
+      (if (and 
+            (= arg "generate")
+            ((complement nil?) (:output options)))
+        (doseq [sg sgs] (sg-info sg))))))
 
