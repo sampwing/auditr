@@ -1,6 +1,7 @@
 (ns auditr.core
   (:gen-class))
 
+(require '[clojure.tools.cli :refer [parse-opts]])
 (require '[amazonica.core :as amazonica])
 (require '[amazonica.aws.ec2 :as ec2])
 (require '[auditr.util :as util])
@@ -14,7 +15,7 @@
     (println (util/build-line (conj data {:ip-address ip-range}))))
   (doseq [group-pair user-id-group-pairs]
     (let [{:keys [group-name]} group-pair]
-    (println (util/build-line (conj data {:security-group group-name})))))
+    (println (util/build-line (conj data {:security-group group-name}))))))
 
 (defn sg-info 
   "print security-group information"
@@ -30,7 +31,19 @@
 (def sgs 
   (:security-groups (ec2/describe-security-groups)))
 
+
+(def cli-options
+  [["-o" "--output OUTPUT" "Output File"
+    :default nil
+    :id :output]])
+
 (defn -main
   [& args]
-  (doseq [sg sgs] (sg-info sg)))
+  (let [{options :options} (parse-opts args cli-options)]
+  (prn options)
+  (doseq [arg args] 
+    (if (and 
+          (= arg "generate")
+          ((complement nil?) (:output options)))
+      (doseq [sg sgs] (sg-info sg))))))
 
