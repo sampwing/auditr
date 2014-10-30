@@ -46,12 +46,31 @@
   (let [rules (get-security-group-rules)]
     (spit filename (clojure.string/join "\n" (generate-configuration-body)))))
 
+(defn build-r
+  [pl]
+  (loop [[car & cdr] pl rs [] mapping {}]
+    (if (nil? car) rs
+    (let [{:keys [group rules]} mapping]
+      (let [inner-mapping (if (= (:type car) :GROUP)
+                            (conj mapping {:group (:identifier car)})
+                            (if (nil? rules)
+                              (conj mapping {:rules [car]})
+                              (conj mapping {:rules (conj rules car)})))]
+        (let [[irs im] (if (empty? cdr)
+                         [(conj rs inner-mapping) {}]
+                         (if (and (= (:type car) :GROUP)
+                                    ((complement empty?) mapping))
+                         [(conj rs mapping) inner-mapping]
+                         [rs inner-mapping]))]
+              (recur cdr irs im)))))))
+
 (defn parse-configuration
   [filename]
   (let [lines (take 10 (clojure.string/split (slurp filename) #"\n"))]
-    (prn lines)
+    ; (prn lines)
     (let [parsed-lines (map config/config-parse-line lines)]
-      (prn parsed-lines)
+      ;(prn parsed-lines)
+      (prn (build-r parsed-lines))
       )))
 
 
