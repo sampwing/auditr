@@ -12,7 +12,6 @@
 
 (defn build-config
   [{:keys [ip-protocol from-port to-port ip-ranges user-id-group-pairs] :as data}]
-  (prn data)
   (let [ip-rules (map util/build-line (map #(conj data {:ip-address %1}) (sort #(compare (util/ip-to-number %1) (util/ip-to-number %2)) ip-ranges)))
         sg-rules (map util/build-line (map #(conj data {:security-group (:group-name %1)}) user-id-group-pairs))]
     (concat ip-rules sg-rules)))
@@ -22,7 +21,7 @@
   [sg]
   (let [{:keys [description group-name ip-permissions]} sg
         m {:group group-name 
-             :rules (sort  (reduce concat (map build-config ip-permissions)))}]
+           :rules (sort  (reduce concat (map build-config ip-permissions)))}]
       m))
 
 (defn get-security-group-rules
@@ -31,6 +30,22 @@
   (let [{security-groups :security-groups} (ec2/describe-security-groups)
         rules (sort #(compare (:group %1) (:group %2)) (map sg-info security-groups))]
       rules))
+
+(defn sg-info2
+  "print security-group information"
+  [sg]
+  (let [{:keys [description group-name ip-permissions]} sg
+        m {:group group-name 
+           :rules ip-permissions}]
+      m))
+
+(defn get-security-group-rules2
+  []
+  (aws-authenticate)
+  (let [{security-groups :security-groups} (ec2/describe-security-groups)
+        rules (sort #(compare (:group %1) (:group %2)) (map sg-info2 security-groups))]
+      rules))
+
 
 (defn generate-configuration-body-helper
   [rules]
@@ -68,7 +83,17 @@
   [filename]
   (let [lines (take 1000 (clojure.string/split (slurp filename) #"\n"))
         parsed-lines (map config/config-parse-line lines)]
-      (prn (rules-from-lines parsed-lines))))
+      (rules-from-lines parsed-lines)))
+
+(defn compare-rules
+  [filename]
+  (let [aws-rules (get-security-group-rules2)
+        config-rules (parse-configuration filename)]
+    (let [config-rule (first config-rules)
+          aws-rule (first (filter #(= (:group config-rule) (:group %1)) aws-rules))]
+      (prn config-rule)
+      (prn "**")
+      (prn aws-rule))))
 
 (def cli-options
   [["-o" "--output OUTPUT" "Output File"
@@ -79,8 +104,9 @@
   [& args]
   (let [{options :options} (parse-opts args cli-options)]
     (doseq [arg args] 
-      (if (= arg "generate")
-        (generate-configuration "configuration")
-        (if (= arg "parse")
-          (prn (parse-configuration "configuration")))))))
+      (cond
+        (= arg "generate") (generate-configuration "configuration")
+        (= arg "parse") (prn (parse-configuration "configuration"))
+        (= arg "compare") (prn (compare-rules "configuration"))
+        :else (prn "not implemented")))))
 
