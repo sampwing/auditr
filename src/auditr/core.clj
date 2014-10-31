@@ -12,7 +12,8 @@
 
 (defn build-config
   [{:keys [ip-protocol from-port to-port ip-ranges user-id-group-pairs] :as data}]
-  (let [ip-rules (map util/build-line (map #(conj data {:ip-address %1}) ip-ranges))
+  (prn data)
+  (let [ip-rules (map util/build-line (map #(conj data {:ip-address %1}) (sort #(compare (util/ip-to-number %1) (util/ip-to-number %2)) ip-ranges)))
         sg-rules (map util/build-line (map #(conj data {:security-group (:group-name %1)}) user-id-group-pairs))]
     (concat ip-rules sg-rules)))
 
@@ -21,7 +22,7 @@
   [sg]
   (let [{:keys [description group-name ip-permissions]} sg]
     (let [m {:group group-name 
-             :rules (sort (reduce concat (map build-config ip-permissions)))}]
+             :rules (sort  (reduce concat (map build-config ip-permissions)))}]
       m)))
  
 
@@ -33,8 +34,8 @@
       rules)))
 
 (defn generate-configuration-body-helper
-  [rule]
-  (str (util/build-line rule) "\n" (clojure.string/join "\n" (:rules rule))))
+  [rules]
+  (str (util/build-line rules) "\n" (clojure.string/join "\n" (:rules rules))))
 
 (defn generate-configuration-body
   []
@@ -46,7 +47,7 @@
   (let [rules (get-security-group-rules)]
     (spit filename (clojure.string/join "\n" (generate-configuration-body)))))
 
-(defn build-r
+(defn rules-from-lines
   [pl]
   (loop [[car & cdr] pl rs [] mapping {}]
     (if (nil? car) rs
@@ -66,13 +67,9 @@
 
 (defn parse-configuration
   [filename]
-  (let [lines (take 10 (clojure.string/split (slurp filename) #"\n"))]
-    ; (prn lines)
+  (let [lines (take 1000 (clojure.string/split (slurp filename) #"\n"))]
     (let [parsed-lines (map config/config-parse-line lines)]
-      ;(prn parsed-lines)
-      (prn (build-r parsed-lines))
-      )))
-
+      (prn (rules-from-lines parsed-lines)))))
 
 (def cli-options
   [["-o" "--output OUTPUT" "Output File"

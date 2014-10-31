@@ -1,6 +1,7 @@
 (ns auditr.config
   (:gen-class))
 
+(require '[clojure.edn :as edn])
 (require '[instaparse.core :as parse])
 
 (def config-parser
@@ -10,7 +11,7 @@
     RULE = (IP-ADDRESS | SECURITY-GROUP) [<WS> PORT-RANGE] [<WS> PROTOCOL]
     SECURITY-GROUP = <'sg'> <WS-EQ> SG
     <SG> = SG-CLASSIC | SG-VPC 
-    <SG-CLASSIC> = #\"\\w{1,255}\"
+    <SG-CLASSIC> = #\"[\\w-]{1,255}\"
     <SG-VPC> = #\"\\w{1,255}\"
     IP-ADDRESS = <'ip'> <WS-EQ> IP 
     PROTOCOL = <'protocol'> <WS-EQ> TYPE
@@ -23,13 +24,18 @@
     <PORT-REG> = #\"\\d+\"
     <TYPE> = #\"\\w+\""))
 
+(defn read-numeric
+  [v]
+  (edn/read-string v))
+
 (defn config-parse-line
   [line]
   (let [r (first (config-parser line))]
+    (prn line)
     (if (= (first r) :GROUP)
       {:type :GROUP :identifier (second r)}
     (let [[[ip-or-sg identifier] [_ from-port to-port] [_ protocol]] (rest r)]
-      {:type ip-or-sg :identifier identifier :from-port from-port :to-port to-port :protocol protocol}))))
+      {:type ip-or-sg :identifier identifier :from-port (read-numeric from-port) :to-port (if (nil? to-port) (read-numeric from-port) (read-numeric to-port)) :protocol protocol}))))
 
 ; config like
 ; [app]
