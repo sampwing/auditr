@@ -20,18 +20,17 @@
 (defn sg-info 
   "print security-group information"
   [sg]
-  (let [{:keys [description group-name ip-permissions]} sg]
-    (let [m {:group group-name 
+  (let [{:keys [description group-name ip-permissions]} sg
+        m {:group group-name 
              :rules (sort  (reduce concat (map build-config ip-permissions)))}]
-      m)))
- 
+      m))
 
 (defn get-security-group-rules
   []
   (aws-authenticate)
-  (let [{security-groups :security-groups} (ec2/describe-security-groups)]
-    (let [rules (sort #(compare (:group %1) (:group %2)) (map sg-info security-groups))]
-      rules)))
+  (let [{security-groups :security-groups} (ec2/describe-security-groups)
+        rules (sort #(compare (:group %1) (:group %2)) (map sg-info security-groups))]
+      rules))
 
 (defn generate-configuration-body-helper
   [rules]
@@ -51,25 +50,25 @@
   [pl]
   (loop [[car & cdr] pl rs [] mapping {}]
     (if (nil? car) rs
-    (let [{:keys [group rules]} mapping]
-      (let [inner-mapping (if (= (:type car) :GROUP)
+    (let [{:keys [group rules]} mapping
+          inner-mapping (if (= (:type car) :GROUP)
                             (conj mapping {:group (:identifier car)})
                             (if (nil? rules)
                               (conj mapping {:rules [car]})
-                              (conj mapping {:rules (conj rules car)})))]
-        (let [[irs im] (if (empty? cdr)
+                              (conj mapping {:rules (conj rules car)})))
+        [irs im] (if (empty? cdr)
                          [(conj rs inner-mapping) {}]
                          (if (and (= (:type car) :GROUP)
                                     ((complement empty?) mapping))
                          [(conj rs mapping) inner-mapping]
                          [rs inner-mapping]))]
-              (recur cdr irs im)))))))
+              (recur cdr irs im)))))
 
 (defn parse-configuration
   [filename]
-  (let [lines (take 1000 (clojure.string/split (slurp filename) #"\n"))]
-    (let [parsed-lines (map config/config-parse-line lines)]
-      (prn (rules-from-lines parsed-lines)))))
+  (let [lines (take 1000 (clojure.string/split (slurp filename) #"\n"))
+        parsed-lines (map config/config-parse-line lines)]
+      (prn (rules-from-lines parsed-lines))))
 
 (def cli-options
   [["-o" "--output OUTPUT" "Output File"
