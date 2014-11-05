@@ -31,7 +31,6 @@
 (defn config-parse-line
   [line]
   (let [r (first (config-parser line))]
-    (prn line)
     (if (= (first r) :GROUP)
       {:type :GROUP :identifier (second r)}
     (let [[[ip-or-sg identifier] [_ from-port to-port] [_ protocol]] (rest r)]

@@ -7,7 +7,6 @@
 
 (defn build-line
   [{:keys [group ip-address security-group from-port to-port ip-protocol] :as line}]
-  (prn line)
   (if (not-nil? group)
     (str "[" group "]")
   (str 

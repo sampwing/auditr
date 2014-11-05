@@ -1,6 +1,7 @@
 (ns auditr.core
   (:gen-class))
 
+(require '[clojure.set :as cset])
 (require '[clojure.tools.cli :refer [parse-opts]])
 (require '[amazonica.core :as amazonica])
 (require '[amazonica.aws.ec2 :as ec2])
@@ -81,19 +82,63 @@
 
 (defn parse-configuration
   [filename]
-  (let [lines (take 1000 (clojure.string/split (slurp filename) #"\n"))
+  (let [lines (clojure.string/split (slurp filename) #"\n")
         parsed-lines (map config/config-parse-line lines)]
       (rules-from-lines parsed-lines)))
 
+(defn make-key
+  [{:keys [identifier protocol from-port]}]
+  (str protocol "://" identifier ":" from-port))
+
+(defn make-keys-aws
+  [{:keys [ip-protocol user-id-group-pairs ip-ranges from-port] :as input}]
+  (let [sgs (if (empty? user-id-group-pairs) []
+              (map #(make-key {:identifier (:group-name %1)
+                                    :protocol ip-protocol
+                                    :from-port from-port})
+                   user-id-group-pairs))
+        ips (if (empty? ip-ranges) []
+              (map #(make-key {:identifier %1
+                                    :protocol ip-protocol
+                                    :from-port from-port})
+                   ip-ranges))]
+    (cset/union (set sgs) (set ips))))
+
+; report mismatches
+(defn compare-conf-aws
+  [{:keys [conf aws]}]
+  (let [conf-missing (cset/difference conf aws)
+        aws-missing (cset/difference aws conf)]
+    (if ((complement empty?) aws-missing)
+         (prn "rule(s) in config which were not found:\n" aws-missing))
+    (if ((complement empty?) conf-missing)
+         (prn "rule(s) in config which were not expected:\n" conf-missing))))
+
+; build rule maps for config and aws for each sg
+(defn build-rule-map
+  [{:keys [rules is-config]}]
+  (loop [[car & cdr] rules
+         rule-map {}]
+    (let [{:keys [rules group]} car
+          rule-set (if (nil? is-config) (reduce cset/union (map make-keys-aws rules))
+                     (set (map make-key rules)))]
+      (if (nil? car) rule-map
+        (recur cdr (assoc rule-map group rule-set))))))
+
+; iterate over the configs map and check against those in sg
 (defn compare-rules
   [filename]
   (let [aws-rules (get-security-group-rules2)
-        config-rules (parse-configuration filename)]
-    (let [config-rule (first config-rules)
-          aws-rule (first (filter #(= (:group config-rule) (:group %1)) aws-rules))]
-      (prn config-rule)
-      (prn "**")
-      (prn aws-rule))))
+        aws-rule-map (build-rule-map {:rules aws-rules})
+        conf-rules (parse-configuration filename)
+        conf-rule-map (build-rule-map {:rules conf-rules :is-config true})]
+    (doseq [[security-group desired-rules] conf-rule-map]
+      (prn security-group)
+      (let [found-rules (get aws-rule-map security-group)]
+        (prn "desired-rules:" desired-rules)
+        (prn "found-rules:" found-rules)
+        (prn "Checking " security-group "...")
+        (compare-conf-aws {:conf desired-rules :aws found-rules})))))
 
 (def cli-options
   [["-o" "--output OUTPUT" "Output File"
@@ -107,6 +152,6 @@
       (cond
         (= arg "generate") (generate-configuration "configuration")
         (= arg "parse") (prn (parse-configuration "configuration"))
-        (= arg "compare") (prn (compare-rules "configuration"))
+        (= arg "compare") (compare-rules "configuration")
         :else (prn "not implemented")))))
 
