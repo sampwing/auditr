@@ -63,22 +63,31 @@
     (spit filename (clojure.string/join "\n" (generate-configuration-body)))))
 
 (defn rules-from-lines
-  [pl]
-  (loop [[car & cdr] pl rs [] mapping {}]
-    (if (nil? car) rs
-    (let [{:keys [group rules]} mapping
-          inner-mapping (if (= (:type car) :GROUP)
-                            (conj mapping {:group (:identifier car)})
-                            (if (nil? rules)
-                              (conj mapping {:rules [car]})
-                              (conj mapping {:rules (conj rules car)})))
-        [irs im] (if (empty? cdr)
-                         [(conj rs inner-mapping) {}]
-                         (if (and (= (:type car) :GROUP)
-                                    ((complement empty?) mapping))
-                         [(conj rs mapping) inner-mapping]
-                         [rs inner-mapping]))]
-              (recur cdr irs im)))))
+  [parsed-lines]
+  (loop [[car & cdr] parsed-lines
+         mapping {}
+         group-name nil
+         group-rules []]
+    (if (nil? car) 
+      (if (empty? group-rules) mapping
+        (assoc mapping group-name group-rules))
+      (let [{:keys [identifier] :as data} car
+            inner-group-name (case (:type car)
+                               :GROUP identifier
+                               nil)
+            inner-rules (case (:type car)
+                          :IP-ADDRESS (conj group-rules data)
+                          :SECURITY-GROUP (conj group-rules data)
+                          [])]
+        (recur cdr (case (:type car)
+                     :GROUP (if (nil? group-name) {}
+                              (assoc mapping group-name group-rules))
+                     mapping)
+               (if (nil? inner-group-name) group-name
+                 inner-group-name)
+               (case (:type car)
+                       :GROUP []
+                       inner-rules))))))
 
 (defn parse-configuration
   [filename]
@@ -108,22 +117,26 @@
 (defn compare-conf-aws
   [{:keys [conf aws]}]
   (let [conf-missing (cset/difference conf aws)
-        aws-missing (cset/difference aws conf)]
-    (if ((complement empty?) aws-missing)
-         (prn "rule(s) in config which were not found:\n" aws-missing))
+        aws-extra (cset/difference aws conf)]
     (if ((complement empty?) conf-missing)
-         (prn "rule(s) in config which were not expected:\n" conf-missing))))
+         (println "rule(s) in config which were not found:\n" conf-missing))
+    (if ((complement empty?) aws-extra)
+         (println "rule(s) which were unexpected:\n" aws-extra))))
 
 ; build rule maps for config and aws for each sg
 (defn build-rule-map
   [{:keys [rules is-config]}]
   (loop [[car & cdr] rules
          rule-map {}]
-    (let [{:keys [rules group]} car
-          rule-set (if (nil? is-config) (reduce cset/union (map make-keys-aws rules))
-                     (set (map make-key rules)))]
-      (if (nil? car) rule-map
+    (if (nil? car) rule-map
+      (let [{:keys [rules group]} car
+            rule-set (if (nil? is-config) (reduce cset/union (map make-keys-aws rules))
+                       (set (map make-key rules)))]
         (recur cdr (assoc rule-map group rule-set))))))
+
+(defn map-kv
+  [m f]
+  (reduce-kv #(assoc %1 %2 (set (map f %3))) {} m))
 
 ; iterate over the configs map and check against those in sg
 (defn compare-rules
@@ -131,13 +144,13 @@
   (let [aws-rules (get-security-group-rules2)
         aws-rule-map (build-rule-map {:rules aws-rules})
         conf-rules (parse-configuration filename)
-        conf-rule-map (build-rule-map {:rules conf-rules :is-config true})]
-    (doseq [[security-group desired-rules] conf-rule-map]
-      (prn security-group)
-      (let [found-rules (get aws-rule-map security-group)]
-        (prn "desired-rules:" desired-rules)
-        (prn "found-rules:" found-rules)
-        (prn "Checking " security-group "...")
+        conf-rule-map (map-kv conf-rules make-key)]
+    (doseq [security-group (sort (keys conf-rule-map))]
+      (let [found-rules (get aws-rule-map security-group)
+            desired-rules (get conf-rule-map security-group)]
+        ;(prn "desired-rules:" desired-rules)
+        ;(prn "found-rules:" found-rules)
+        (println "Checking" security-group "...")
         (compare-conf-aws {:conf desired-rules :aws found-rules})))))
 
 (def cli-options
